@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drug Design Solutions</title>
+    
+    <style>
+        /* General styling */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: x-small;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #3c8dbc, #00c0ef, #8e44ad, #f39c12);
+            background-size: 400% 400%;
+            animation: gradientAnimation 12s ease infinite;
+            color: #000;
+        }
+        @keyframes gradientAnimation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Container styles */
+        .container {
+            padding: 20px;
+            text-align: center;
+            background: rgba(228, 226, 226, 0.9);
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            margin: 50px auto;
+        }
+
+        /* Header styles */
+        .header {
+            margin-bottom: 20px;
+        }
+        .header img {
+            width: 500px;
+            max-width: 100%;
+            height: 300px;
+            border-radius: 8px;
+        }
+
+        /* Form and button styles */
+        .options {
+            margin-top: 20px;
+        }
+        input[type="text"], button {
+            padding: 15px 25px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+            background-color: transparent;
+            border: 2px solid rgba(0, 0, 0, 0.8);
+            border-radius: 4px;
+            color: #000;
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+            width: calc(100% - 50px);
+            max-width: 400px;
+        }
+        input[type="text"]::placeholder {
+            color: rgba(0, 0, 0, 0.5);
+        }
+        button {
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #fff;
+        }
+        button:active {
+            background-color: #00c0ef;
+            color: #000;
+        }        
+
+        /* Output container styles */
+        .output-container {
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+        .output {
+            padding: 20px;
+            border: 1px solid #000;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            background-color: rgba(255, 255, 255, 0.9);
+            margin: auto;
+            margin-top: 10px;
+            width: fit-content;
+            max-width: 100%;
+            text-align: center;
+            display: inline-block;
+        }
+        .output p {
+            margin: 0;
+        }
+
+        /* Footer styles */
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            color: #000;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+        .footer a {
+            color: #000;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Table styles */
+        .variants-table {
+            margin-top: 20px;
+            border-collapse: collapse;
+            width: 100%;
+            max-width: 100%;
+            border: 2px solid #000; /* Black border */
+            text-align: center; /* Center align headers and content */
+        }
+
+        .variants-table th,
+        .variants-table td {
+            border: 1px solid #000; /* Black border for cells */
+            padding: 8px;
+        }
+
+        .variants-table th {
+            background-color: #4CAF50;
+            color: white;
+            text-align: center; /* Center align headers */
+        }
+
+        .variants-table td {
+            text-align: left; /* Left align SMILES variants */
+        }
+    </style>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script>
+        var variant_smiles = [];
+
+        // Function to search for drugs
+        function searchDrugs() {
+            var diseaseName = document.getElementById('diseaseName').value;
+            var requestData = { disease_name: diseaseName };
+
+            $.ajax({
+                url: '/search_drugs',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(requestData),
+                success: function(response) {
+                    var drugList = response.drugs;
+                    var html = '<div class="output" id="drugList">';
+                    drugList.forEach(function(drug) {
+                        html += `<button onclick="selectDrug(this, '${drug}')">${drug}</button>`;
+                    });
+                    html += '</div>';
+                    document.getElementById('drugListContainer').innerHTML = html;
+                    document.getElementById('drugListContainer').style.display = 'block'; // Show drug list container
+                    hideOutput(['smileOutputContainer', 'variantsOutputContainer', 'validVariantsOutputContainer']); // Hide other output containers
+                    document.getElementById('extractSmileBtn').disabled = true; // Disable extract SMILES button initially
+                    document.getElementById('generateVariantsBtn').disabled = true; // Disable generate variants button initially
+                }
+            });
+        }
+
+        // Function to select drug and enable extract SMILES button
+        function selectDrug(button, drugName) {
+            // Remove active class from previously selected button
+            var activeButton = document.getElementById('drugList').querySelector('.active');
+            if (activeButton) {
+                activeButton.classList.remove('active');
+            }
+
+            // Add active class to current button
+            button.classList.add('active');
+
+            // Scroll to extract SMILES button
+            var extractSmileBtn = document.getElementById('extractSmileBtn');
+            extractSmileBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            document.getElementById('smileOutputContainer').innerHTML = ''; // Clear previous SMILES output
+            document.getElementById('variantsOutputContainer').innerHTML = ''; // Clear previous variants output
+            document.getElementById('extractSmileBtn').disabled = false; // Enable extract SMILES button
+            document.getElementById('generateVariantsBtn').disabled = true; // Disable generate variants button until SMILES is extracted
+            document.getElementById('extractSmileBtn').setAttribute('data-drug', drugName); // Store selected drug name in button attribute
+        }
+
+// Function to extract SMILES
+function extractSmile() {
+    var drugName = document.getElementById('extractSmileBtn').getAttribute('data-drug');
+    var requestData = { selected_drug: drugName };
+
+    $.ajax({
+        url: '/get_smile',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(requestData),
+        success: function(response) {
+            var smile = response.smile;
+            var imageUrl = response.image_url;
+            var html = `
+                <div class="output">
+                    <p>SMILES: ${smile}</p>
+                    <img src="${imageUrl}" alt="Molecule Image" />
+                    <br />
+                    <label for="carbonIndices">Carbon indices for Variants (comma-separated):</label>
+                    <input type="text" id="carbonIndices" placeholder="e.g., 0,1" />
+                    <br />
+                    <label for="elements">Elements for Variant Generation  (comma-separated):</label>
+                    <input type="text" id="elements" placeholder="e.g., Cl,S,O" />
+                </div>`;
+            document.getElementById('smileOutputContainer').innerHTML = html;
+            document.getElementById('smileOutputContainer').style.display = 'block'; // Show SMILES output container
+            document.getElementById('generateVariantsBtn').disabled = false; // Enable generate variants button after successful extraction
+            document.getElementById('generateVariantsBtn').setAttribute('data-smile', smile); // Store extracted SMILES for use in generating variants
+        },
+        error: function(xhr, status, error) {
+            console.error('Error fetching SMILES:', error);
+            alert('Failed to retrieve SMILES.');
+        }
+    });
+}
+
+// Function to generate variants and display descriptors in a new window
+function generateVariants() {
+    var smile = document.getElementById('generateVariantsBtn').getAttribute('data-smile');
+    var carbonIndicesInput = document.getElementById('carbonIndices').value;
+    var elementsInput = document.getElementById('elements').value;
+
+    // Convert input to arrays
+    var carbonIndices = carbonIndicesInput.split(',').map(Number);
+    var elements = elementsInput.split(',').map(e => e.trim());
+
+    var requestData = { smile: smile, carbon_indices: carbonIndices, elements: elements };
+
+    $.ajax({
+        url: '/generate_variants',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(requestData),
+        success: function(response) {
+            var variants = response.variants;
+            var numVariants = response.num_variants;
+
+            // Prepare CSV data
+            var csvContent = "data:text/csv;charset=utf-8,";
+            var headers = "Sr.No.,Variant,Image,Molecular Weight,LogP,Num Atoms,Num Bonds,Num Rotatable Bonds,Num [H] Donors,Num [H] Acceptors,TPSA,Aromatic Rings Count,pIC50,Drug Likeness\n";
+            csvContent += headers;
+
+            variants.forEach(function(variant, index) {
+                var row = [
+                    index + 1,
+                    variant.smiles,
+                    "Image Data", // Placeholder; actual image data should be handled separately if needed
+                    variant.molecular_weight.toFixed(2),
+                    variant.logP.toFixed(2),
+                    variant.num_atoms,
+                    variant.num_bonds,
+                    variant.num_rotatable_bonds,
+                    variant.num_h_donors,
+                    variant.num_h_acceptors,
+                    variant.tpsa.toFixed(2),
+                    variant.aromatic_rings_count,
+                    variant.pIC50,
+                    variant.drug_likeness
+                ].join(",");
+                csvContent += row + "\n";
+            });
+
+            // Create a download link
+            var encodedUri = encodeURI(csvContent);
+            var downloadLink = `<a href="${encodedUri}" download="variants_descriptors.csv" class="btn-download">Download CSV</a>`;
+
+            // Prepare HTML content for displaying variants with descriptors
+            var html = '<!DOCTYPE html>';
+            html += '<html lang="en">';
+            html += '<head>';
+            html += '<meta charset="UTF-8">';
+            html += '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
+            html += '<title>Generated Variants</title>';
+            html += '<style>';
+            html += 'body { font-family: Arial, sans-serif; margin: 0; padding: 0; }';
+            html += '.output { padding: 20px; }';
+            html += '.variants-table { border-collapse: collapse; width: 100%; max-width: 100%; border: 2px solid #000; text-align: center; }';
+            html += '.variants-table th, .variants-table td { border: 1px solid #000; padding: 8px; }';
+            html += '.variants-table th { background-color: #4CAF50; color: white; text-align: center; }';
+            html += '.variants-table td { text-align: left; }';
+            html += '.btn-download { position: fixed; top: 10px; right: 10px; background-color: #4CAF50; color: white; border: none; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; font-size: 16px; border-radius: 5px; }';
+            html += '.btn-download:hover { background-color: #45a049; }';
+            html += '</style>';
+            html += '</head>';
+            html += '<body>';
+            html += `<a href="${encodedUri}" download="variants_descriptors.csv" class="btn-download">Download CSV</a>`;
+            html += '<div class="output">';
+            html += `<p>Generated ${numVariants} variants:</p>`;
+            html += '<table class="variants-table">';
+            html += '<tr><th>Sr.No.</th><th>Variant</th><th>Image</th><th>Molecular Weight</th><th>LogP</th><th>Num Atoms</th><th>Num Bonds</th><th>Num Rotatable Bonds</th><th>Num [H] Donors</th><th>Num [H] Acceptors</th><th>TPSA</th><th>Aromatic Rings Count</th><th>pIC50</th><th>Drug Likeness</th></tr>';
+
+            variants.forEach(function(variant, index) {
+                html += `<tr>
+                            <td>${index + 1}</td>
+                            <td>${variant.smiles}</td>
+                            <td><img src="data:image/png;base64,${variant.image}" alt="Molecule Image"></td>
+                            <td>${variant.molecular_weight.toFixed(2)}</td>
+                            <td>${variant.logP.toFixed(2)}</td>
+                            <td>${variant.num_atoms}</td>
+                            <td>${variant.num_bonds}</td>
+                            <td>${variant.num_rotatable_bonds}</td>
+                            <td>${variant.num_h_donors}</td>
+                            <td>${variant.num_h_acceptors}</td>
+                            <td>${variant.tpsa.toFixed(2)}</td>
+                            <td>${variant.aromatic_rings_count}</td>
+                            <td>${variant.pIC50}</td>
+                            <td>${variant.drug_likeness}</td>
+                        </tr>`;
+            });
+
+            html += '</table>';
+            html += '</div>';
+            html += '</body>';
+            html += '</html>';
+
+            // Open a new window and populate with the generated content
+            var newWindow = window.open('', '_blank');
+            newWindow.document.open();
+            newWindow.document.write(html);
+            newWindow.document.close();
+        },
+        error: function(xhr, status, error) {
+            console.error('Error generating variants:', error);
+            alert('Failed to generate variants.');
+        }
+    });
+}
+
+
+        // Function to hide output containers
+        function hideOutput(containers) {
+            containers.forEach(function(container) {
+                document.getElementById(container).style.display = 'none';
+            });
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="{{ url_for('static', filename='shaepd_logo.png') }}" alt="SHAEPD Industries">
+            <h2>Drug Design Solutions</h2>
+            <p>Design and discover drugs with innovative solutions.</p>
+        </div>
+
+        <div class="options">
+            <input type="text" id="diseaseName" placeholder="Enter disease name">
+            <button onclick="searchDrugs()">Search Drugs</button>
+        </div>
+
+        <div id="drugListContainer" class="output-container"></div>
+
+        <div id="smileOutputContainer" class="output-container"></div>
+
+        <div id="variantsOutputContainer" class="output-container"></div>
+
+        <div id="validVariantsOutputContainer" class="output-container"></div>
+
+        <button id="extractSmileBtn" onclick="extractSmile()" disabled>Extract SMILES</button>
+        <button id="generateVariantsBtn" onclick="generateVariants()" disabled>Generate Variants</button>
+
+        <div class="footer">
+            <p>&copy; 2025 SHAEPD Industries. All rights reserved. <a href="#">Privacy Policy</a> | <a href="#">Terms of Service</a></p>
+        </div>
+    </div>
+</body>
+</html>
